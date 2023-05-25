@@ -13,8 +13,6 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-pub mod weights;
-pub use weights::*;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -30,8 +28,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// Type representing the weight of this pallet
-		type WeightInfo: WeightInfo;
+		/// The Maximum length of calim that can be added
+		type MaxClaimLength: Get<u32>;
 	}
 
 	// The pallet's runtime storage items.
@@ -40,7 +38,12 @@ pub mod pallet {
 	#[pallet::getter(fn something)]
 	// Learn more about declaring storage items:
 	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	pub type Proofs<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		BoundedVec<u8, T::MaxClaimLength>,
+		(T::AccountId, T::BlockNumber),
+	>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/
@@ -48,17 +51,20 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
+		ClaimCreated(T::AccountId, BoundedVec<u8, T::MaxClaimLength>),
+		ClaimRevoked(T::AccountId, BoundedVec<u8, T::MaxClaimLength>),
+		ClaimTransfered(T::AccountId, BoundedVec<u8, T::MaxClaimLength>),
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Error names should be descriptive.
-		NoneValue,
 		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
+		ProofAlreadyExists,
+		ClaimTooLong,
+		ClaimNotExist,
+		NotClaimOwner,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -68,41 +74,84 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::do_something())]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
+		#[pallet::weight(0)]
+		pub fn create_claim(
+			origin: OriginFor<T>, 
+			claim: BoundedVec<u8, T::MaxClaimLength>,
+		) -> DispatchResultWithPostInfo {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+			let sender = ensure_signed(origin)?;
+
+			ensure!(!Proofs::<T>::contains_key(&claim), Error::<T>::ProofAlreadyExists);
 
 			// Update storage.
-			<Something<T>>::put(something);
+			Proofs::<T>::insert(
+				&claim,
+				(sender.clone(), frame_system::Pallet::<T>::block_number()),
+			);
 
 			// Emit an event.
-			Self::deposit_event(Event::SomethingStored { something, who });
+			Self::deposit_event(Event::ClaimCreated(sender, claim));
 			// Return a successful DispatchResultWithPostInfo
-			Ok(())
+			Ok(().into())
 		}
 
-		/// An example dispatchable that may throw a custom error.
+
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::cause_error())]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+		#[pallet::weight(0)]
+		pub fn revoke_claim(
+			origin: OriginFor<T>, 
+			claim: BoundedVec<u8, T::MaxClaimLength>,
+		) -> DispatchResultWithPostInfo {
+			// Check that the extrinsic was signed and get the signer.
+			// This function will return an error if the extrinsic is not signed.
+			// https://docs.substrate.io/main-docs/build/origins/
+			let sender = ensure_signed(origin)?;
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
+			let (owner, _) = Proofs::<T>::get(&claim).ok_or(Error::<T>::ClaimNotExist)?;
+			ensure!(owner == sender, Error::<T>::NotClaimOwner);
+
+			// Update storage.
+			Proofs::<T>::remove(
+				&claim,
+			);
+
+			// Emit an event.
+			Self::deposit_event(Event::ClaimRevoked(sender, claim));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(().into())
 		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(0)]
+		pub fn transfer_claim(
+			origin: OriginFor<T>, 
+			dest: T::AccountId,
+			claim: BoundedVec<u8, T::MaxClaimLength>,
+		) -> DispatchResultWithPostInfo {
+			// Check that the extrinsic was signed and get the signer.
+			// This function will return an error if the extrinsic is not signed.
+			// https://docs.substrate.io/main-docs/build/origins/
+			let sender = ensure_signed(origin)?;
+
+			let (owner, _) = Proofs::<T>::get(&claim).ok_or(Error::<T>::ClaimNotExist)?;
+			ensure!(owner == sender, Error::<T>::NotClaimOwner);
+
+			// Update storage.
+			Proofs::<T>::insert(
+				&claim,
+				(dest.clone(), frame_system::Pallet::<T>::block_number()),
+			);
+
+			// Emit an event.
+			Self::deposit_event(Event::ClaimTransfered(dest, claim));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(().into())
+		}
+
 	}
 }
