@@ -2,6 +2,12 @@
 
 pub use pallet::*;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -24,7 +30,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		type Randomness:Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 	}
 
@@ -36,11 +42,16 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn kitties)]
-	pub type Kitties<T> = StorageMap<_, Blake2_128Concat, KittyId, Kitty>;
+	pub type Kitties<T: Config> = StorageMap<_, Blake2_128Concat, KittyId, Kitty>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn kitty_owner)]
 	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, KittyId, T::AccountId>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn kitty_parents)]
+	pub type KittyParents<T: Config> = StorageMap<_, Blake2_128Concat, KittyId, (KittyId, KittyId), OptionQuery>;
+
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/
@@ -48,12 +59,16 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		KittyCreated { who: T::AccountId, kitty_id: KittyId, kitty: Kitty},
+		KittyBred { who: T::AccountId, kitty_id: KittyId, kitty: Kitty},
+		KittyTransferred { from: T::AccountId, to: T::AccountId, kitty_id: KittyId},
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
 		InvalidKittyId,
+		SameParentsId,
+		NotOwner,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -64,7 +79,7 @@ pub mod pallet {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(10_000)]
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
@@ -80,6 +95,52 @@ pub mod pallet {
 			// Emit an event.
 			Self::deposit_event(Event::KittyCreated {who, kitty_id, kitty });
 			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(10_000)]
+		pub fn breed(origin: OriginFor<T>, kitty_id_1: KittyId, kitty_id_2: KittyId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(kitty_id_1 != kitty_id_2, Error::<T>::SameParentsId);
+
+			ensure!(Kitties::<T>::contains_key(kitty_id_1), Error::<T>::InvalidKittyId);
+			ensure!(Kitties::<T>::contains_key(kitty_id_2), Error::<T>::InvalidKittyId);
+
+			let kitty_id = Self::get_next_id()?;
+			let kitty_1 = Self::kitties(kitty_id_1).ok_or(Error::<T>::InvalidKittyId)?;
+			let kitty_2 = Self::kitties(kitty_id_2).ok_or(Error::<T>::InvalidKittyId)?;
+
+			let selector = Self::random_value(&who);
+			let mut data = [0u8; 16];
+			for i in 0..kitty_1.0.len() {
+				data[i] = (kitty_1.0[i] & selector[i]) | (kitty_2.0[i] & !selector[i]);
+			}
+			let kitty = Kitty(data);
+
+			Kitties::<T>::insert(kitty_id, &kitty);
+			KittyOwner::<T>::insert(kitty_id, &who);
+			KittyParents::<T>::insert(kitty_id, (kitty_id_1, kitty_id_2));
+
+			// Emit an event.
+			Self::deposit_event(Event::KittyBred {who, kitty_id, kitty });
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(10_000)]
+		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, kitty_id: KittyId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Kitties::<T>::contains_key(kitty_id), Error::<T>::InvalidKittyId);
+
+			let owner = Self::kitty_owner(kitty_id).ok_or(Error::<T>::InvalidKittyId)?;
+			ensure!(owner == who, Error::<T>::NotOwner);
+
+			KittyOwner::<T>::insert(kitty_id, &to);
+			Self::deposit_event(Event::KittyTransferred {from: who, to, kitty_id});
 			Ok(())
 		}
 
