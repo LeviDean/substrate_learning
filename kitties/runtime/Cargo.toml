@@ -49,11 +49,9 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, g
 
 # Local Dependencies
 pallet-template = { version = "4.0.0-dev", default-features = false, path = "../pallets/template" }
-pallet-kitties = { version = "4.0.0-dev", default-features = false, path = "../pallets/kitties" }
-
-# For kitties pallet
-pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.42"}
-getrandom = {version ="0.2.10", default-features = false, features = ["js"] }
+pallet-kitties = {version = "4.0.0-dev", default-features = false, path = "../pallets/kitties"}
+pallet-insecure-randomness-collective-flip = { default-features = false, version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.42"}
+sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.42" }
 
 
 [build-dependencies]
@@ -77,7 +75,6 @@ std = [
 	"pallet-grandpa/std",
 	"pallet-sudo/std",
 	"pallet-template/std",
-	"pallet-kitties/std",
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
@@ -94,6 +91,8 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
+	"pallet-kitties/std",
+	"pallet-insecure-randomness-collective-flip/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

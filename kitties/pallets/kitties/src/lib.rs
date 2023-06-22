@@ -17,6 +17,7 @@ pub mod pallet {
 	use sp_io::hashing::blake2_128;
 	use frame_support::traits::Randomness;
 
+	/// Kitty struct
 	pub type KittyId = u32;
 
 	#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq, Default, TypeInfo, MaxEncodedLen)]
@@ -30,12 +31,10 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
-
+		type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
 	}
 
 	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
 	#[pallet::storage]
 	#[pallet::getter(fn next_kitty_id)]
 	pub type NextKittyId<T> = StorageValue<_, KittyId, ValueQuery>;
@@ -54,7 +53,6 @@ pub mod pallet {
 
 
 	// Pallets use events to inform users when important changes are made.
-	// https://docs.substrate.io/main-docs/build/events-errors/
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -76,18 +74,15 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000)]
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
 			let who = ensure_signed(origin)?;
 
 			let kitty_id = Self::get_next_id()?;
 			let kitty = Kitty(Self::random_value(&who));
+            // let kitty = Kitty(Default::default());
 
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
@@ -98,7 +93,23 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// An example dispatchable that may throw a custom error.
 		#[pallet::call_index(1)]
+		#[pallet::weight(10_000)]
+		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, kitty_id: KittyId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Kitties::<T>::contains_key(kitty_id), Error::<T>::InvalidKittyId);
+
+			let owner = Self::kitty_owner(kitty_id).ok_or(Error::<T>::InvalidKittyId)?;
+			ensure!(owner == who, Error::<T>::NotOwner);
+
+			KittyOwner::<T>::insert(kitty_id, &to);
+			Self::deposit_event(Event::KittyTransferred {from: who, to, kitty_id});
+			Ok(())
+		}
+
+		#[pallet::call_index(2)]
 		#[pallet::weight(10_000)]
 		pub fn breed(origin: OriginFor<T>, kitty_id_1: KittyId, kitty_id_2: KittyId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -128,22 +139,6 @@ pub mod pallet {
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
-
-		#[pallet::call_index(2)]
-		#[pallet::weight(10_000)]
-		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, kitty_id: KittyId) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-
-			ensure!(Kitties::<T>::contains_key(kitty_id), Error::<T>::InvalidKittyId);
-
-			let owner = Self::kitty_owner(kitty_id).ok_or(Error::<T>::InvalidKittyId)?;
-			ensure!(owner == who, Error::<T>::NotOwner);
-
-			KittyOwner::<T>::insert(kitty_id, &to);
-			Self::deposit_event(Event::KittyTransferred {from: who, to, kitty_id});
-			Ok(())
-		}
-
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -157,9 +152,9 @@ pub mod pallet {
 
 		fn random_value(sender: &T::AccountId) -> [u8; 16] {
 			let payload = (
-				T::Randomness::random_seed(),
-				&sender,
-				<frame_system::Pallet<T>>::extrinsic_index(),
+                &sender,
+				T::KittyRandomness::random(&b"dna"[..]).0,
+				<frame_system::Pallet<T>>::block_number(),
 			);
 			payload.using_encoded(blake2_128)
 		}

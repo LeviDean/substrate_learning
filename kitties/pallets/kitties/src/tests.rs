@@ -1,7 +1,6 @@
 use crate::{mock::*, Error, Event};
 use frame_support::{assert_noop, assert_ok};
 
-
 #[test]
 fn create_works() {
 	new_test_ext().execute_with(|| {
@@ -26,6 +25,26 @@ fn create_works() {
 			Error::<Test>::InvalidKittyId
 		);
 	});
+}
+
+#[test]
+fn transfer_works() {
+	new_test_ext().execute_with( || {
+
+		let kitty_id = 0;
+		let account_id = 1;
+		let another_account_id = 2;
+
+		assert_eq!(KittiesModule::next_kitty_id(), kitty_id);
+		assert_ok!(KittiesModule::create(RuntimeOrigin::signed(account_id)));
+
+		assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(account_id));
+		
+		assert_noop!(KittiesModule::transfer(RuntimeOrigin::signed(another_account_id), account_id, kitty_id), Error::<Test>::NotOwner);
+		
+		assert_ok!(KittiesModule::transfer(RuntimeOrigin::signed(account_id), another_account_id, kitty_id));
+		assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(another_account_id));
+	})
 }
 
 #[test]
@@ -59,24 +78,4 @@ fn breed_workes() {
 		assert_eq!(KittiesModule::kitty_owner(breed_kitty_id), Some(account_id));
 		assert_eq!(KittiesModule::kitty_parents(breed_kitty_id), Some((kitty_id, kitty_id + 1)));
 	});
-}
-
-#[test]
-fn transfer_works() {
-	new_test_ext().execute_with( || {
-
-		let kitty_id = 0;
-		let account_id = 1;
-		let another_account_id = 2;
-
-		assert_eq!(KittiesModule::next_kitty_id(), kitty_id);
-		assert_ok!(KittiesModule::create(RuntimeOrigin::signed(account_id)));
-
-		assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(account_id));
-		
-		assert_noop!(KittiesModule::transfer(RuntimeOrigin::signed(another_account_id), account_id, kitty_id), Error::<Test>::NotOwner);
-		
-		assert_ok!(KittiesModule::transfer(RuntimeOrigin::signed(account_id), another_account_id, kitty_id));
-		assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(another_account_id));
-	})
 }

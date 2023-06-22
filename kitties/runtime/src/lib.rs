@@ -48,9 +48,8 @@ pub use sp_runtime::{Perbill, Permill};
 /// Import the template pallet.
 pub use pallet_template;
 
-/// Import the kitties pallet.
-pub use pallet_insecure_randomness_collective_flip;
 pub use pallet_kitties;
+pub use pallet_insecure_randomness_collective_flip;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -277,14 +276,13 @@ impl pallet_template::Config for Runtime {
 	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
 }
 
-/// Configure the pallet-kitties in pallets/kitties.
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 impl pallet_kitties::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Randomness = Randomness;
-}
+	type KittyRandomness = MyRandomness;
 
+}
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
@@ -303,9 +301,8 @@ construct_runtime!(
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
-		// Include the custom logic from the pallet-kitties in the runtime.
 		KittiesModule: pallet_kitties,
-		Randomness: pallet_insecure_randomness_collective_flip,
+		MyRandomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 	}
 );
 

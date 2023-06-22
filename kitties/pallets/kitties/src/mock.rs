@@ -5,8 +5,8 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-
 use pallet_insecure_randomness_collective_flip;
+
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -19,8 +19,9 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
+		// Randomness: pallet_insecure_randomness_collective_flip,
 		KittiesModule: pallet_kitties,
-		Randomness: pallet_insecure_randomness_collective_flip,
+		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 	}
 );
 
@@ -51,13 +52,13 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-// Configure a mock runtime to test the pallet.
+// impl pallet_insecure_randomness_collective_flip::Config for Test {}
+
 impl pallet_kitties::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Randomness = Randomness;
+	type KittyRandomness = Randomness;
 }
 
-// Configure a mock runtime to test the pallet.
 impl pallet_insecure_randomness_collective_flip::Config for Test {}
 
 // Build genesis storage according to the mock runtime.
