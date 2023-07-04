@@ -10,6 +10,7 @@
 
 # Kitty lesson 2
 **测试截图**
+![Alt text](k2-image-1.png)
 
 **节点运行截图**
 ![Alt text](images/k2-image-2.png)
