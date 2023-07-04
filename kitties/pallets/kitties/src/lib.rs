@@ -29,9 +29,10 @@ pub mod pallet {
 	// pub struct Kitty(pub [u8; 16]);
 	pub struct Kitty {
 		pub dna: [u8; 16],
-		pub name: [u8; 4],
+		pub name: [u8; 8],
 	}
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -98,7 +99,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			migrations::v1::migrate::<T>()
+			migrations::v2::migrate::<T>()
 		}
 	}
 
@@ -110,7 +111,7 @@ pub mod pallet {
 		
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000)]
-		pub fn create(origin: OriginFor<T>, name: [u8; 4]) -> DispatchResult {
+		pub fn create(origin: OriginFor<T>, name: [u8; 8]) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let kitty_id = Self::get_next_id()?;
@@ -148,7 +149,7 @@ pub mod pallet {
 
 		#[pallet::call_index(2)]
 		#[pallet::weight(10_000)]
-		pub fn breed(origin: OriginFor<T>, kitty_id_1: KittyId, kitty_id_2: KittyId, name: [u8; 4]) -> DispatchResult {
+		pub fn breed(origin: OriginFor<T>, kitty_id_1: KittyId, kitty_id_2: KittyId, name: [u8; 8]) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(kitty_id_1 != kitty_id_2, Error::<T>::SameParentsId);

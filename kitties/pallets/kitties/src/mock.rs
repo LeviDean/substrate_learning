@@ -1,5 +1,6 @@
 use crate as pallet_kitties;
-use frame_support::traits::{ConstU16, ConstU64};
+use frame_support::traits::{ConstU16, ConstU32, ConstU64, ConstU128};
+use frame_support::{PalletId, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -10,6 +11,7 @@ use pallet_insecure_randomness_collective_flip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+pub type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -20,6 +22,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		// Randomness: pallet_insecure_randomness_collective_flip,
+		Balances: pallet_balances,
 		KittiesModule: pallet_kitties,
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 	}
@@ -43,20 +46,47 @@ impl frame_system::Config for Test {
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
-// impl pallet_insecure_randomness_collective_flip::Config for Test {}
+/// Existential deposit.
+pub const EXISTENTIAL_DEPOSIT: Balance = 500;
+
+impl pallet_balances::Config for Test {
+	type MaxLocks = ConstU32<50>;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	/// The type for recording an account's balance.
+	type Balance = Balance;
+	/// The ubiquitous event type.
+	type RuntimeEvent = RuntimeEvent;
+	type DustRemoval = ();
+	type ExistentialDeposit = ConstU128<EXISTENTIAL_DEPOSIT>;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
+}
+
+parameter_types! {
+	pub const KittyPalletId: PalletId = PalletId(*b"py/kitty");
+	pub const KittyPrice: Balance = EXISTENTIAL_DEPOSIT * 100;
+}
 
 impl pallet_kitties::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type KittyRandomness = Randomness;
+	type Currency = Balances;
+	type KittyPrice = KittyPrice;
+	type PalletId = KittyPalletId; 
 }
 
 impl pallet_insecure_randomness_collective_flip::Config for Test {}
